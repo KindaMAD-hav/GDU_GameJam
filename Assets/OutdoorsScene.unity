@@ -1056,7 +1056,7 @@ MonoBehaviour:
   runSpeed: 14.28
   grounded: 0
   onWall: 0
-  dashSpeed: 10
+  dashSpeed: 67.2
 --- !u!1 &724148691
 GameObject:
   m_ObjectHideFlags: 0
