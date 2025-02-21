@@ -62,6 +62,7 @@ public class PlayerMovement : MonoBehaviour
     private Vector3 wallNormalVector;
     private Vector3 wallRunPos;
     private Vector3 previousLookdir;
+    private Vector3 lastCheckpointPosition;
 
     //Private int
     private int nw;
@@ -82,8 +83,22 @@ public class PlayerMovement : MonoBehaviour
         Cursor.visible = false;
         readyToJump = true;
         wallNormalVector = Vector3.up;
+        lastCheckpointPosition = transform.position;
+        Debug.Log("[PlayerMovement] Starting position set to: " + lastCheckpointPosition);
     }
 
+    public void SetCheckpoint(Vector3 checkpoint)
+    {
+        lastCheckpointPosition = checkpoint;
+        Debug.Log("[PlayerMovement] Checkpoint set to: " + lastCheckpointPosition);
+    }
+
+    public void Respawn()
+    {
+        Debug.Log("[PlayerMovement] Respawning to: " + lastCheckpointPosition);
+        transform.position = lastCheckpointPosition;
+        rb.linearVelocity = Vector3.zero; // Reset velocity
+    }
     private void LateUpdate()
     {
         //For wallrunning
