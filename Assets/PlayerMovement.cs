@@ -1,23 +1,20 @@
-// PlayerMovement
 using System;
 using UnityEngine;
+using System.Collections; // Needed for IEnumerator
 
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Assignables")]
-    //Assignables
     public Transform playerCam;
     public Transform orientation;
     private Collider playerCollider;
     public Rigidbody rb;
 
     [Space(10)]
-
     public LayerMask whatIsGround;
     public LayerMask whatIsWallrunnable;
 
     [Header("MovementSettings")]
-    //Movement Settings 
     public float sensitivity = 50f;
     public float moveSpeed = 4500f;
     public float walkSpeed = 20f;
@@ -25,7 +22,13 @@ public class PlayerMovement : MonoBehaviour
     public bool grounded;
     public bool onWall;
 
-    //Private Floats
+    // -- Dash Settings --
+    [Header("Dash Settings")]
+    public float dashForce = 30f;       // Force applied when dashing
+    public float dashDuration = 0.2f;   // How long the dash lasts
+    public float dashCooldown = 1f;     // Time before dash can be used again
+
+    // Private floats
     private float wallRunGravity = 1f;
     private float maxSlopeAngle = 35f;
     private float wallRunRotation;
@@ -39,9 +42,8 @@ public class PlayerMovement : MonoBehaviour
     private float jumpForce = 550f;
     private float x;
     private float y;
-    private float vel;
 
-    //Private bools
+    // Private bools
     private bool readyToJump;
     private bool jumping;
     private bool sprinting;
@@ -56,18 +58,21 @@ public class PlayerMovement : MonoBehaviour
     private bool cancellingWall;
     private bool cancellingSurf;
 
-    //Private Vector3's
-    private Vector3 grapplePoint;
+    // -- Dash State --
+    private bool isDashing = false;
+    private bool canDash = true;
+
+    // Private Vector3's
     private Vector3 normalVector;
     private Vector3 wallNormalVector;
     private Vector3 wallRunPos;
     private Vector3 previousLookdir;
     private Vector3 lastCheckpointPosition;
 
-    //Private int
+    // Private int
     private int nw;
 
-    //Instance
+    // Instance
     public static PlayerMovement Instance { get; private set; }
 
     private void Awake()
@@ -99,33 +104,36 @@ public class PlayerMovement : MonoBehaviour
         transform.position = lastCheckpointPosition;
         rb.linearVelocity = Vector3.zero; // Reset velocity
     }
+
     private void LateUpdate()
     {
-        //For wallrunning
+        // Wallrunning logic
         WallRunning();
     }
 
     private void FixedUpdate()
     {
-        //For moving
+        // Normal movement logic
         Movement();
     }
 
     private void Update()
     {
-        //Input
+        // Handle input
         MyInput();
-        //Looking around
+
+        // Mouse look
         Look();
     }
 
-    //Player input
     private void MyInput()
     {
         x = Input.GetAxisRaw("Horizontal");
         y = Input.GetAxisRaw("Vertical");
         jumping = Input.GetButton("Jump");
         crouching = Input.GetKey(KeyCode.C);
+
+        // Crouch
         if (Input.GetKeyDown(KeyCode.C))
         {
             StartCrouch();
@@ -134,65 +142,71 @@ public class PlayerMovement : MonoBehaviour
         {
             StopCrouch();
         }
+
+        // Dash (Left Shift)
+        if (Input.GetKeyDown(KeyCode.LeftShift) && canDash && !isDashing)
+        {
+            StartCoroutine(Dash());
+        }
     }
 
-    //Scale player down
     private void StartCrouch()
     {
         float num = 400f;
-        base.transform.localScale = new Vector3(1f, 0.5f, 1f);
-        base.transform.position = new Vector3(base.transform.position.x, base.transform.position.y - 0.5f, base.transform.position.z);
+        transform.localScale = new Vector3(1f, 0.5f, 1f);
+        transform.position = new Vector3(transform.position.x, transform.position.y - 0.5f, transform.position.z);
+
+        // Slide boost
         if (rb.linearVelocity.magnitude > 0.1f && grounded)
         {
             rb.AddForce(orientation.transform.forward * num);
         }
     }
 
-    //Scale player to original size
     private void StopCrouch()
     {
-        base.transform.localScale = new Vector3(1f, 1.5f, 1f);
-        base.transform.position = new Vector3(base.transform.position.x, base.transform.position.y + 0.5f, base.transform.position.z);
+        transform.localScale = new Vector3(1f, 1.5f, 1f);
+        transform.position = new Vector3(transform.position.x, transform.position.y + 0.5f, transform.position.z);
     }
 
-    //Moving around with WASD
     private void Movement()
     {
+        // If we're currently dashing, skip normal movement
+        if (isDashing) return;
+
+        // Gravity
         rb.AddForce(Vector3.down * Time.deltaTime * 10f);
+
         Vector2 mag = FindVelRelativeToLook();
         float num = mag.x;
         float num2 = mag.y;
+
         CounterMovement(x, y, mag);
+
         if (readyToJump && jumping)
         {
             Jump();
         }
+
         float num3 = walkSpeed;
         if (sprinting)
         {
             num3 = runSpeed;
         }
+
+        // Crouch movement
         if (crouching && grounded && readyToJump)
         {
             rb.AddForce(Vector3.down * Time.deltaTime * 3000f);
             return;
         }
-        if (x > 0f && num > num3)
-        {
-            x = 0f;
-        }
-        if (x < 0f && num < 0f - num3)
-        {
-            x = 0f;
-        }
-        if (y > 0f && num2 > num3)
-        {
-            y = 0f;
-        }
-        if (y < 0f && num2 < 0f - num3)
-        {
-            y = 0f;
-        }
+
+        // Limit movement if already at max speeds
+        if (x > 0f && num > num3) x = 0f;
+        if (x < 0f && num < -num3) x = 0f;
+        if (y > 0f && num2 > num3) y = 0f;
+        if (y < 0f && num2 < -num3) y = 0f;
+
         float num4 = 1f;
         float num5 = 1f;
         if (!grounded)
@@ -214,26 +228,29 @@ public class PlayerMovement : MonoBehaviour
             num4 = 0.7f;
             num5 = 0.3f;
         }
+
+        // Apply movement forces
         rb.AddForce(orientation.transform.forward * y * moveSpeed * Time.deltaTime * num4 * num5);
         rb.AddForce(orientation.transform.right * x * moveSpeed * Time.deltaTime * num4);
     }
 
-    //Ready to jump again
     private void ResetJump()
     {
         readyToJump = true;
     }
 
-    //Player go fly
     private void Jump()
     {
         if ((grounded || wallRunning || surfing) && readyToJump)
         {
-            MonoBehaviour.print("jumping");
             Vector3 velocity = rb.linearVelocity;
             readyToJump = false;
+
+            // Upward force
             rb.AddForce(Vector2.up * jumpForce * 1.5f);
             rb.AddForce(normalVector * jumpForce * 0.5f);
+
+            // Reset vertical velocity if needed
             if (rb.linearVelocity.y < 0.5f)
             {
                 rb.linearVelocity = new Vector3(velocity.x, 0f, velocity.z);
@@ -242,54 +259,60 @@ public class PlayerMovement : MonoBehaviour
             {
                 rb.linearVelocity = new Vector3(velocity.x, velocity.y / 2f, velocity.z);
             }
+
+            // Extra force if wallrunning
             if (wallRunning)
             {
                 rb.AddForce(wallNormalVector * jumpForce * 3f);
-            }
-            Invoke("ResetJump", jumpCooldown);
-            if (wallRunning)
-            {
                 wallRunning = false;
             }
+
+            Invoke("ResetJump", jumpCooldown);
         }
     }
 
-    //Looking around by using your mouse
     private void Look()
     {
         float num = Input.GetAxis("Mouse X") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
         float num2 = Input.GetAxis("Mouse Y") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
+
         desiredX = playerCam.transform.localRotation.eulerAngles.y + num;
         xRotation -= num2;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
+
         FindWallRunRotation();
         actualWallRotation = Mathf.SmoothDamp(actualWallRotation, wallRunRotation, ref wallRotationVel, 0.2f);
+
         playerCam.transform.localRotation = Quaternion.Euler(xRotation, desiredX, actualWallRotation);
         orientation.transform.localRotation = Quaternion.Euler(0f, desiredX, 0f);
     }
 
-    //Make the player movement feel good 
     private void CounterMovement(float x, float y, Vector2 mag)
     {
-        if (!grounded || jumping)
-        {
-            return;
-        }
+        if (!grounded || jumping) return;
+
         float num = 0.16f;
         float num2 = 0.01f;
+
+        // Sliding slowdown
         if (crouching)
         {
             rb.AddForce(moveSpeed * Time.deltaTime * -rb.linearVelocity.normalized * slideSlowdown);
             return;
         }
-        if ((Math.Abs(mag.x) > num2 && Math.Abs(x) < 0.05f) || (mag.x < 0f - num2 && x > 0f) || (mag.x > num2 && x < 0f))
+
+        // Counter movement on X axis
+        if ((Math.Abs(mag.x) > num2 && Math.Abs(x) < 0.05f) || (mag.x < -num2 && x > 0f) || (mag.x > num2 && x < 0f))
         {
-            rb.AddForce(moveSpeed * orientation.transform.right * Time.deltaTime * (0f - mag.x) * num);
+            rb.AddForce(moveSpeed * orientation.transform.right * Time.deltaTime * (-mag.x) * num);
         }
-        if ((Math.Abs(mag.y) > num2 && Math.Abs(y) < 0.05f) || (mag.y < 0f - num2 && y > 0f) || (mag.y > num2 && y < 0f))
+        // Counter movement on Y axis
+        if ((Math.Abs(mag.y) > num2 && Math.Abs(y) < 0.05f) || (mag.y < -num2 && y > 0f) || (mag.y > num2 && y < 0f))
         {
-            rb.AddForce(moveSpeed * orientation.transform.forward * Time.deltaTime * (0f - mag.y) * num);
+            rb.AddForce(moveSpeed * orientation.transform.forward * Time.deltaTime * (-mag.y) * num);
         }
+
+        // Limit diagonal running
         if (Mathf.Sqrt(Mathf.Pow(rb.linearVelocity.x, 2f) + Mathf.Pow(rb.linearVelocity.z, 2f)) > walkSpeed)
         {
             float num3 = rb.linearVelocity.y;
@@ -301,11 +324,14 @@ public class PlayerMovement : MonoBehaviour
     public Vector2 FindVelRelativeToLook()
     {
         float current = orientation.transform.eulerAngles.y;
-        float target = Mathf.Atan2(rb.linearVelocity.x, rb.linearVelocity.z) * 57.29578f;
+        float target = Mathf.Atan2(rb.linearVelocity.x, rb.linearVelocity.z) * Mathf.Rad2Deg;
         float num = Mathf.DeltaAngle(current, target);
         float num2 = 90f - num;
         float magnitude = rb.linearVelocity.magnitude;
-        return new Vector2(y: magnitude * Mathf.Cos(num * ((float)Math.PI / 180f)), x: magnitude * Mathf.Cos(num2 * ((float)Math.PI / 180f)));
+
+        float xMag = magnitude * Mathf.Cos(num2 * Mathf.Deg2Rad);
+        float yMag = magnitude * Mathf.Cos(num * Mathf.Deg2Rad);
+        return new Vector2(xMag, yMag);
     }
 
     private void FindWallRunRotation()
@@ -315,34 +341,17 @@ public class PlayerMovement : MonoBehaviour
             wallRunRotation = 0f;
             return;
         }
-        _ = new Vector3(0f, playerCam.transform.rotation.y, 0f).normalized;
-        new Vector3(0f, 0f, 1f);
-        float num = 0f;
+
+        float num = Vector3.SignedAngle(new Vector3(0f, 0f, 1f), wallNormalVector, Vector3.up);
         float current = playerCam.transform.rotation.eulerAngles.y;
-        if (Math.Abs(wallNormalVector.x - 1f) < 0.1f)
-        {
-            num = 90f;
-        }
-        else if (Math.Abs(wallNormalVector.x - -1f) < 0.1f)
-        {
-            num = 270f;
-        }
-        else if (Math.Abs(wallNormalVector.z - 1f) < 0.1f)
-        {
-            num = 0f;
-        }
-        else if (Math.Abs(wallNormalVector.z - -1f) < 0.1f)
-        {
-            num = 180f;
-        }
-        num = Vector3.SignedAngle(new Vector3(0f, 0f, 1f), wallNormalVector, Vector3.up);
         float num2 = Mathf.DeltaAngle(current, num);
-        wallRunRotation = (0f - num2 / 90f) * 15f;
-        if (!readyToWallrun)
-        {
-            return;
-        }
-        if ((Mathf.Abs(wallRunRotation) < 4f && y > 0f && Math.Abs(x) < 0.1f) || (Mathf.Abs(wallRunRotation) > 22f && y < 0f && Math.Abs(x) < 0.1f))
+
+        wallRunRotation = (-num2 / 90f) * 15f;
+
+        if (!readyToWallrun) return;
+
+        if ((Mathf.Abs(wallRunRotation) < 4f && y > 0f && Math.Abs(x) < 0.1f) ||
+            (Mathf.Abs(wallRunRotation) > 22f && y < 0f && Math.Abs(x) < 0.1f))
         {
             if (!cancelling)
             {
@@ -360,7 +369,6 @@ public class PlayerMovement : MonoBehaviour
 
     private void CancelWallrun()
     {
-        MonoBehaviour.print("cancelled");
         Invoke("GetReadyToWallrun", 0.1f);
         rb.AddForce(wallNormalVector * 600f);
         readyToWallrun = false;
@@ -423,24 +431,26 @@ public class PlayerMovement : MonoBehaviour
     private void OnCollisionStay(Collision other)
     {
         int layer = other.gameObject.layer;
+
+        // Check if this collision is with ground
         if ((int)whatIsGround != ((int)whatIsGround | (1 << layer)))
         {
             return;
         }
+
         for (int i = 0; i < other.contactCount; i++)
         {
             Vector3 normal = other.contacts[i].normal;
+
             if (IsFloor(normal))
             {
-                if (wallRunning)
-                {
-                    wallRunning = false;
-                }
+                if (wallRunning) wallRunning = false;
                 grounded = true;
                 normalVector = normal;
                 cancellingGrounded = false;
                 CancelInvoke("StopGrounded");
             }
+
             if (IsWall(normal) && layer == LayerMask.NameToLayer("Ground"))
             {
                 StartWallRun(normal);
@@ -448,6 +458,7 @@ public class PlayerMovement : MonoBehaviour
                 cancellingWall = false;
                 CancelInvoke("StopWall");
             }
+
             if (IsSurf(normal))
             {
                 surfing = true;
@@ -456,21 +467,22 @@ public class PlayerMovement : MonoBehaviour
             }
             IsRoof(normal);
         }
-        float num = 3f;
+
+        float num2 = 3f;
         if (!cancellingGrounded)
         {
             cancellingGrounded = true;
-            Invoke("StopGrounded", Time.deltaTime * num);
+            Invoke("StopGrounded", Time.deltaTime * num2);
         }
         if (!cancellingWall)
         {
             cancellingWall = true;
-            Invoke("StopWall", Time.deltaTime * num);
+            Invoke("StopWall", Time.deltaTime * num2);
         }
         if (!cancellingSurf)
         {
             cancellingSurf = true;
-            Invoke("StopSurf", Time.deltaTime * num);
+            Invoke("StopSurf", Time.deltaTime * num2);
         }
     }
 
@@ -519,4 +531,39 @@ public class PlayerMovement : MonoBehaviour
     {
         return rb;
     }
+
+    // ---------------------------
+    // DASH COROUTINE
+    // ---------------------------
+    private IEnumerator Dash()
+    {
+        canDash = false;
+        isDashing = true;
+
+        // 1) Determine dash direction from input
+        //    (This example assumes you store horizontal/vertical input in x/y).
+        Vector3 dashDirection = orientation.forward * y + orientation.right * x;
+
+        // 2) If no input is pressed, fall back to facing forward
+        if (dashDirection.sqrMagnitude < 0.1f)
+        {
+            dashDirection = orientation.forward;
+        }
+
+        dashDirection.Normalize();
+
+        // 3) Apply an impulse in that direction
+        rb.AddForce(dashDirection * dashForce, ForceMode.Impulse);
+
+        // 4) Dash lasts for dashDuration
+        yield return new WaitForSeconds(dashDuration);
+
+        // End dash
+        isDashing = false;
+
+        // 5) Cooldown
+        yield return new WaitForSeconds(dashCooldown);
+        canDash = true;
+    }
+
 }

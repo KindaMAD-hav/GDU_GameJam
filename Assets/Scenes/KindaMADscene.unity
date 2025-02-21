@@ -4076,9 +4076,17 @@ PrefabInstance:
       value: Player
       objectReference: {fileID: 0}
     - target: {fileID: 7606253974713520103, guid: 7e3c39870d54a47449cc4f6d23c7503b, type: 3}
+      propertyPath: dashForce
+      value: 45
+      objectReference: {fileID: 0}
+    - target: {fileID: 7606253974713520103, guid: 7e3c39870d54a47449cc4f6d23c7503b, type: 3}
       propertyPath: playerCam
       value: 
       objectReference: {fileID: 1900069308}
+    - target: {fileID: 7606253974713520103, guid: 7e3c39870d54a47449cc4f6d23c7503b, type: 3}
+      propertyPath: dashCooldown
+      value: 2
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
