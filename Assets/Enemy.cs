@@ -4,8 +4,7 @@ public class Enemy : MonoBehaviour
 {
     public void Kill()
     {
-        Debug.Log($"[Enemy] Kill() called on {gameObject.name}");
-        // Destroy or handle death logic
+        // Optional: Add death animation, particles, etc. before destroying
         Destroy(gameObject);
     }
 }
