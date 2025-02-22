@@ -65,8 +65,9 @@ public class Enemy : MonoBehaviour
                 break;
 
             case EnemyState.Attack:
-                // Face the player
-                transform.LookAt(player.position);
+                // Aim slightly below the player's pivot (adjust 0.5f as needed)
+                Vector3 lookTarget = player.position + Vector3.down * 0.5f;
+                transform.LookAt(lookTarget);
 
                 // If player is out of range, go back to chase
                 if (distanceToPlayer > attackDistance)
