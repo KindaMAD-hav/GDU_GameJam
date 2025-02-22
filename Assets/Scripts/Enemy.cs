@@ -15,6 +15,8 @@ public class Enemy : MonoBehaviour
     public float destroyDelay = 3f;     // Time after death before destroying the enemy
 
     private float nextAttackTime = 0f;
+    private float nextDebugTime = 0f;    // Timer for debug logging
+    private const float DEBUG_INTERVAL = 1f;  // Log every second
 
     // Possible enemy states
     private enum EnemyState { Idle, Chase, Attack, Dead }
@@ -25,33 +27,40 @@ public class Enemy : MonoBehaviour
         // If references aren't set in Inspector, try to find them
         if (!animator) animator = GetComponent<Animator>();
         if (!agent) agent = GetComponent<NavMeshAgent>();
+
+        // Ensure initial state is correctly set
+        UpdateAnimationState();
     }
 
     private void Update()
     {
+        // Debug logging every second
+        if (Time.time >= nextDebugTime)
+        {
+            Debug.Log($"[{gameObject.name}] IsRunning: {animator.GetBool("IsRunning")}, Current State: {currentState}, Agent Velocity: {agent.velocity.magnitude}");
+            nextDebugTime = Time.time + DEBUG_INTERVAL;
+        }
+
         // If already dead, do nothing
         if (currentState == EnemyState.Dead) return;
 
         // Calculate distance to the player
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
 
+        EnemyState previousState = currentState;
+
         switch (currentState)
         {
             case EnemyState.Idle:
-                // Play Idle animation
-                animator.SetBool("IsRunning", false);
-
                 // If player is within chase range, switch to chase
                 if (distanceToPlayer < chaseDistance)
                 {
                     currentState = EnemyState.Chase;
+                    Debug.Log($"[{gameObject.name}] Transitioning from Idle to Chase. Distance to player: {distanceToPlayer}");
                 }
                 break;
 
             case EnemyState.Chase:
-                // Play Run animation
-                animator.SetBool("IsRunning", true);
-
                 // Move towards the player
                 agent.isStopped = false;
                 agent.SetDestination(player.position);
@@ -61,6 +70,7 @@ public class Enemy : MonoBehaviour
                 {
                     currentState = EnemyState.Attack;
                     agent.isStopped = true;
+                    Debug.Log($"[{gameObject.name}] Transitioning from Chase to Attack. Distance to player: {distanceToPlayer}");
                 }
                 break;
 
@@ -72,6 +82,7 @@ public class Enemy : MonoBehaviour
                 if (distanceToPlayer > attackDistance)
                 {
                     currentState = EnemyState.Chase;
+                    Debug.Log($"[{gameObject.name}] Transitioning from Attack back to Chase. Distance to player: {distanceToPlayer}");
                     break;
                 }
 
@@ -79,22 +90,46 @@ public class Enemy : MonoBehaviour
                 if (Time.time >= nextAttackTime)
                 {
                     // Randomly choose Attack1 or Attack2
-                    if (Random.value < 0.5f)
-                        animator.SetTrigger("Attack1");
-                    else
-                        animator.SetTrigger("Attack2");
+                    bool isAttack1 = Random.value < 0.5f;
+                    animator.SetTrigger(isAttack1 ? "Attack1" : "Attack2");
+                    Debug.Log($"[{gameObject.name}] Performing {(isAttack1 ? "Attack1" : "Attack2")}");
 
                     // Set next time we can attack
                     nextAttackTime = Time.time + attackCooldown;
                 }
                 break;
         }
+
+        // If state changed, update animation
+        if (previousState != currentState)
+        {
+            UpdateAnimationState();
+        }
     }
 
-    /// <summary>
-    /// Kills the enemy: triggers death animation and destroys the GameObject.
-    /// Call this when the enemy's health reaches 0, for example.
-    /// </summary>
+    private void UpdateAnimationState()
+    {
+        // Reset all animation states
+        animator.SetBool("IsRunning", false);
+
+        // Set appropriate animation for current state
+        switch (currentState)
+        {
+            case EnemyState.Chase:
+                animator.SetBool("IsRunning", true);
+                break;
+            case EnemyState.Attack:
+                animator.SetBool("IsRunning", false);
+                break;
+            case EnemyState.Idle:
+                animator.SetBool("IsRunning", false);
+                break;
+            case EnemyState.Dead:
+                animator.SetBool("IsRunning", false);
+                break;
+        }
+    }
+
     public void Kill()
     {
         // Prevent double-death
@@ -102,9 +137,12 @@ public class Enemy : MonoBehaviour
 
         // Switch to Dead state
         currentState = EnemyState.Dead;
+        Debug.Log($"[{gameObject.name}] Enemy killed");
 
-        // Stop movement and running animation
-        animator.SetBool("IsRunning", false);
+        // Update animation state
+        UpdateAnimationState();
+
+        // Stop movement
         agent.isStopped = true;
 
         // Trigger death animation

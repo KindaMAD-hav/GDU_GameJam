@@ -64,7 +64,7 @@ Material:
     - _ExcludeFromTUAndAA: 0
     - _MaterialID: 1
     - _MaterialTypeMask: 2
-    - _NoisePower: -5.45
+    - _NoisePower: -4.54
     - _NoiseScale: 100
     - _OpaqueCullMode: 2
     - _PerPixelSorting: 0
