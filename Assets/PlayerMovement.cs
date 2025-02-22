@@ -567,6 +567,8 @@ public class PlayerMovement : MonoBehaviour
         // Apply an impulse in that direction
         rb.AddForce(dashDirection * dashForce, ForceMode.Impulse);
 
+        SoundManager.Instance.PlaySFX("Dash");
+
         // Dash lasts for dashDuration
         yield return new WaitForSeconds(dashDuration);
 
