@@ -71,4 +71,14 @@ public class GrapplingScript : MonoBehaviour
         // Rope drawing logic here
         Debug.Log("Drawing rope...");
     }
+
+    public bool IsGrappling()
+    {
+        return joint != null;
+    }
+
+    public Vector3 GetGrapplePoint()
+    {
+        return grapplePoint;
+    }
 }
